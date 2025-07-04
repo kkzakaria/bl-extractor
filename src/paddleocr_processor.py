@@ -42,11 +42,11 @@ class PaddleOCRProcessor:
             # Déterminer si utiliser GPU
             use_gpu = self.gpu_detector.should_use_gpu()
             
-            # Initialiser PaddleOCR avec configuration optimale
+            # Initialiser PaddleOCR avec configuration optimale pour v3.x
             ocr_config = {
                 'use_angle_cls': True,  # Classification d'angle pour rotation
                 'lang': 'en',           # Anglais par défaut
-                'use_gpu': use_gpu,     # GPU si disponible et recommandé
+                'device': 'gpu:0' if use_gpu else 'cpu',  # Device pour PaddleOCR 3.x
                 'enable_mkldnn': True,  # Optimisations CPU
             }
             
@@ -78,7 +78,7 @@ class PaddleOCRProcessor:
                     self.ocr_engine = PaddleOCR(
                         use_angle_cls=True,
                         lang='en',
-                        use_gpu=False
+                        device='cpu'
                     )
                     logger.info("✅ PaddleOCR initialisé en mode CPU (fallback)")
                     return True
