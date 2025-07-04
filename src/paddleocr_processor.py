@@ -7,7 +7,10 @@ import tempfile
 import os
 import time
 
-from .gpu_detector import GPUDetector
+try:
+    from .gpu_detector import GPUDetector
+except ImportError:
+    from gpu_detector import GPUDetector
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +28,13 @@ class PaddleOCRProcessor:
     def _init_paddle_ocr(self) -> bool:
         """Initialise PaddleOCR avec détection automatique GPU"""
         try:
-            from paddleocr import PaddleOCR
+            # Configurer la suppression des logs PaddleOCR avant l'import
+            os.environ['DISABLE_AUTO_LOGGING_CONFIG'] = '1'
+            
+            from paddleocr import PaddleOCR, logger as paddleocr_logger
+            
+            # Configurer le logger PaddleOCR selon la doc officielle
+            paddleocr_logger.setLevel(logging.WARNING)
             
             # Afficher le statut GPU
             self.gpu_detector.log_gpu_status()
@@ -34,16 +43,18 @@ class PaddleOCRProcessor:
             use_gpu = self.gpu_detector.should_use_gpu()
             
             # Initialiser PaddleOCR avec configuration optimale
-            self.ocr_engine = PaddleOCR(
-                use_angle_cls=True,  # Classification d'angle pour rotation
-                lang='en',           # Anglais par défaut
-                use_gpu=use_gpu,     # GPU si disponible et recommandé
-                show_log=False,      # Réduire les logs
-                # Paramètres d'optimisation GPU
-                gpu_mem=8000 if use_gpu else None,  # Limite mémoire GPU
-                enable_mkldnn=True,  # Optimisations CPU
-                cpu_threads=4 if not use_gpu else 1  # Threads CPU
-            )
+            ocr_config = {
+                'use_angle_cls': True,  # Classification d'angle pour rotation
+                'lang': 'en',           # Anglais par défaut
+                'use_gpu': use_gpu,     # GPU si disponible et recommandé
+                'enable_mkldnn': True,  # Optimisations CPU
+            }
+            
+            # Ajouter les paramètres CPU seulement si on n'utilise pas GPU
+            if not use_gpu:
+                ocr_config['cpu_threads'] = 4
+            
+            self.ocr_engine = PaddleOCR(**ocr_config)
             
             device_type = "GPU" if use_gpu else "CPU"
             logger.info(f"✅ PaddleOCR initialisé avec succès ({device_type})")
@@ -67,8 +78,7 @@ class PaddleOCRProcessor:
                     self.ocr_engine = PaddleOCR(
                         use_angle_cls=True,
                         lang='en',
-                        use_gpu=False,
-                        show_log=False
+                        use_gpu=False
                     )
                     logger.info("✅ PaddleOCR initialisé en mode CPU (fallback)")
                     return True
@@ -282,9 +292,9 @@ class PaddleOCRProcessor:
             "en",    # Anglais
             "fr",    # Français
             "ch",    # Chinois
-            "german", # Allemand
-            "korean", # Coréen
-            "japan"   # Japonais
+            "de",    # Allemand
+            "ko",    # Coréen
+            "ja"     # Japonais
         ]
     
     def set_confidence_threshold(self, threshold: float):
