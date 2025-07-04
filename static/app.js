@@ -66,16 +66,23 @@ class BLExtractor {
             const data = await response.json();
             
             const gpuStatus = document.getElementById('gpu-status');
+            const capabilities = data.capabilities;
             
-            if (data.gpu_available) {
+            if (capabilities.gpu_acceleration && capabilities.nvidia_gpu) {
                 gpuStatus.className = 'status-item online';
-                gpuStatus.innerHTML = `<i class="fas fa-microchip"></i><span>GPU: ${data.gpu_count} disponible(s)</span>`;
-            } else {
+                gpuStatus.innerHTML = `<i class="fas fa-microchip"></i><span>GPU: Actif (${capabilities.gpu_memory_mb}MB)</span>`;
+            } else if (capabilities.nvidia_gpu && !capabilities.gpu_acceleration) {
                 gpuStatus.className = 'status-item warning';
+                gpuStatus.innerHTML = `<i class="fas fa-microchip"></i><span>GPU: Détecté mais non utilisé</span>`;
+            } else {
+                gpuStatus.className = 'status-item offline';
                 gpuStatus.innerHTML = '<i class="fas fa-microchip"></i><span>GPU: Non disponible</span>';
             }
         } catch (error) {
             console.error('Error checking capabilities:', error);
+            const gpuStatus = document.getElementById('gpu-status');
+            gpuStatus.className = 'status-item offline';
+            gpuStatus.innerHTML = '<i class="fas fa-microchip"></i><span>GPU: Erreur détection</span>';
         }
     }
 
