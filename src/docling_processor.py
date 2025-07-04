@@ -35,17 +35,28 @@ class DoclingProcessor:
             raise Exception("Docling non disponible")
         
         try:
-            from docling.document_converter import DocumentConverter
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
             from docling.datamodel.base_models import InputFormat
             
-            # Créer le convertisseur
-            converter = DocumentConverter()
+            # Configuration optimisée pour les connaissements
+            pipeline_options = PdfPipelineOptions(
+                artifacts_path="./docling_models",  # Cache local des modèles
+                enable_remote_services=False  # Sécurité et performance
+            )
+            
+            # Créer le convertisseur avec configuration optimisée
+            converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                }
+            )
             
             # Extraire le document
             result = converter.convert(file_path)
             
-            # Obtenir le texte structuré
-            structured_text = result.document.export_to_text()
+            # Obtenir le texte structuré avec préservation de la mise en forme
+            structured_text = result.document.export_to_markdown()
             
             logger.info(f"Extraction Docling réussie: {len(structured_text)} caractères")
             
@@ -142,17 +153,30 @@ class DoclingProcessor:
             return None
     
     def _extract_tables(self, document) -> list:
-        """Extrait les tableaux du document"""
+        """Extrait les tableaux du document avec gestion d'erreurs améliorée"""
         try:
             tables = []
             for table in document.tables:
                 table_data = {
-                    "data": table.export_to_dataframe().to_dict() if hasattr(table, 'export_to_dataframe') else None,
-                    "bbox": table.prov[0].bbox if table.prov else None
+                    "data": None,
+                    "bbox": table.prov[0].bbox if table.prov else None,
+                    "raw_content": str(table) if table else None
                 }
+                
+                # Tentative d'export DataFrame avec gestion d'erreur
+                try:
+                    if hasattr(table, 'export_to_dataframe'):
+                        df = table.export_to_dataframe()
+                        table_data["data"] = df.to_dict() if df is not None else None
+                except Exception as e:
+                    logger.warning(f"Erreur export DataFrame pour table: {e}")
+                    # Fallback vers le contenu brut
+                    table_data["data"] = table_data["raw_content"]
+                
                 tables.append(table_data)
             return tables
-        except:
+        except Exception as e:
+            logger.error(f"Erreur extraction tables: {e}")
             return []
     
     def _extract_text_blocks(self, document) -> list:
