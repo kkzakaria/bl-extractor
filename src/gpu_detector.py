@@ -24,7 +24,18 @@ class GPUDetector:
             "recommended_use_gpu": False
         }
         
-        # Recommandation d'utilisation GPU
+        # Détection d'utilisation GPU effective (PyTorch pour Docling/EasyOCR)
+        pytorch_gpu_available = self._check_pytorch_gpu()
+        self._gpu_info["pytorch_gpu_support"] = pytorch_gpu_available
+        
+        # GPU utilisé si PyTorch peut l'utiliser (même si PaddleOCR ne peut pas)
+        self._gpu_info["gpu_actually_used"] = (
+            self._gpu_info["nvidia_gpu"] and 
+            self._gpu_info["cuda_available"] and 
+            pytorch_gpu_available
+        )
+        
+        # Recommandation d'utilisation GPU pour PaddleOCR spécifiquement
         self._gpu_info["recommended_use_gpu"] = (
             self._gpu_info["nvidia_gpu"] and 
             self._gpu_info["cuda_available"] and 
@@ -92,6 +103,23 @@ class GPUDetector:
             return False
         except Exception as e:
             logger.warning(f"Erreur vérification Paddle GPU: {str(e)}")
+            return False
+    
+    def _check_pytorch_gpu(self) -> bool:
+        """Vérifie si PyTorch supporte GPU (utilisé par Docling/EasyOCR)"""
+        try:
+            import torch
+            # Vérifier si CUDA est disponible dans PyTorch
+            cuda_available = torch.cuda.is_available()
+            if cuda_available:
+                gpu_count = torch.cuda.device_count()
+                return gpu_count > 0
+            return False
+        except ImportError:
+            # PyTorch pas installé, probablement pas de GPU support
+            return False
+        except Exception as e:
+            logger.warning(f"Erreur vérification PyTorch GPU: {str(e)}")
             return False
     
     def _get_gpu_memory(self) -> int:

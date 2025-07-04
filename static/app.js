@@ -68,12 +68,14 @@ class BLExtractor {
             const gpuStatus = document.getElementById('gpu-status');
             const capabilities = data.capabilities;
             
-            if (capabilities.gpu_acceleration && capabilities.nvidia_gpu) {
+            if (capabilities.nvidia_gpu && capabilities.cuda_available) {
+                // GPU disponible - il est utilisé par PyTorch/Docling même si pas par PaddleOCR
                 gpuStatus.className = 'status-item online';
-                gpuStatus.innerHTML = `<i class="fas fa-microchip"></i><span>GPU: Actif (${capabilities.gpu_memory_mb}MB)</span>`;
-            } else if (capabilities.nvidia_gpu && !capabilities.gpu_acceleration) {
-                gpuStatus.className = 'status-item warning';
-                gpuStatus.innerHTML = `<i class="fas fa-microchip"></i><span>GPU: Détecté mais non utilisé</span>`;
+                if (capabilities.gpu_acceleration) {
+                    gpuStatus.innerHTML = `<i class="fas fa-microchip"></i><span>GPU: Pleinement actif (${capabilities.gpu_memory_mb}MB)</span>`;
+                } else {
+                    gpuStatus.innerHTML = `<i class="fas fa-microchip"></i><span>GPU: Actif PyTorch+Docling (${capabilities.gpu_memory_mb}MB)</span>`;
+                }
             } else {
                 gpuStatus.className = 'status-item offline';
                 gpuStatus.innerHTML = '<i class="fas fa-microchip"></i><span>GPU: Non disponible</span>';
