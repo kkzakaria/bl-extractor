@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import logging
 from pathlib import Path
 from typing import Optional
@@ -16,11 +17,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Servir les fichiers statiques pour l'interface web
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 extractor = AdvancedBLExtractor()
 
 @app.get("/")
 async def root():
-    return {"message": "Bill of Lading Extractor API"}
+    """Redirige vers l'interface web"""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/static/index.html")
 
 @app.post("/extract", response_model=BillOfLadingData)
 async def extract_bill_of_lading(
