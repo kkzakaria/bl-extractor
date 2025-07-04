@@ -1,0 +1,34 @@
+# Requirements avec support GPU pour PaddleOCR
+# Utilisez ce fichier si vous avez une GPU NVIDIA avec CUDA installé
+
+# FastAPI et serveur web
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# PaddleOCR avec support GPU
+paddlepaddle-gpu==3.1.0
+paddleocr==3.1.0
+
+# Traitement d'images
+opencv-python==4.8.1.78
+Pillow==10.1.0
+
+# Traitement PDF
+pdfplumber==0.10.3
+pymupdf==1.23.8
+
+# Utilitaires
+python-dateutil==2.8.2
+regex==2023.10.3
+
+# LLM et extraction avancée
+ollama==0.5.1
+docling
+
+# Notes d'installation GPU:
+# 1. Assurez-vous d'avoir CUDA 11.2+ installé
+# 2. Vérifiez la compatibilité GPU: nvidia-smi
+# 3. Installation: pip install -r requirements-gpu.txt
+# 4. Test GPU: python -c "import paddle; print(paddle.device.cuda.device_count())"

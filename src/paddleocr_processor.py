@@ -5,31 +5,54 @@ from PIL import Image
 from typing import Optional, List, Dict, Any
 import tempfile
 import os
+import time
+
+from .gpu_detector import GPUDetector
 
 logger = logging.getLogger(__name__)
 
 class PaddleOCRProcessor:
-    """Processeur PaddleOCR pour l'extraction de texte depuis des images et PDF"""
+    """Processeur PaddleOCR pour l'extraction de texte depuis des images et PDF avec support GPU"""
     
     def __init__(self):
         self.ocr_engine = None
+        self.gpu_detector = GPUDetector()
         self.available = self._init_paddle_ocr()
         self.confidence_threshold = 0.5
+        self.use_gpu = self.gpu_detector.should_use_gpu()
+        self.performance_stats = {"total_extractions": 0, "total_time": 0.0, "avg_time": 0.0}
     
     def _init_paddle_ocr(self) -> bool:
-        """Initialise PaddleOCR"""
+        """Initialise PaddleOCR avec détection automatique GPU"""
         try:
             from paddleocr import PaddleOCR
             
-            # Initialiser PaddleOCR avec les langues supportées
+            # Afficher le statut GPU
+            self.gpu_detector.log_gpu_status()
+            
+            # Déterminer si utiliser GPU
+            use_gpu = self.gpu_detector.should_use_gpu()
+            
+            # Initialiser PaddleOCR avec configuration optimale
             self.ocr_engine = PaddleOCR(
                 use_angle_cls=True,  # Classification d'angle pour rotation
                 lang='en',           # Anglais par défaut
-                use_gpu=False,       # CPU par défaut (changeable)
-                show_log=False       # Réduire les logs
+                use_gpu=use_gpu,     # GPU si disponible et recommandé
+                show_log=False,      # Réduire les logs
+                # Paramètres d'optimisation GPU
+                gpu_mem=8000 if use_gpu else None,  # Limite mémoire GPU
+                enable_mkldnn=True,  # Optimisations CPU
+                cpu_threads=4 if not use_gpu else 1  # Threads CPU
             )
             
-            logger.info("✅ PaddleOCR initialisé avec succès")
+            device_type = "GPU" if use_gpu else "CPU"
+            logger.info(f"✅ PaddleOCR initialisé avec succès ({device_type})")
+            
+            # Afficher les estimations de performance
+            perf_info = self.gpu_detector.get_performance_estimate()
+            if perf_info["gpu_acceleration"]:
+                logger.info(f"🚀 {perf_info['recommendation']}")
+            
             return True
             
         except ImportError:
@@ -37,11 +60,25 @@ class PaddleOCRProcessor:
             return False
         except Exception as e:
             logger.error(f"❌ Erreur initialisation PaddleOCR: {str(e)}")
+            # Fallback vers CPU si GPU échoue
+            if self.gpu_detector.should_use_gpu():
+                logger.info("🔄 Tentative de fallback vers CPU...")
+                try:
+                    self.ocr_engine = PaddleOCR(
+                        use_angle_cls=True,
+                        lang='en',
+                        use_gpu=False,
+                        show_log=False
+                    )
+                    logger.info("✅ PaddleOCR initialisé en mode CPU (fallback)")
+                    return True
+                except Exception as e2:
+                    logger.error(f"❌ Fallback CPU échoué: {str(e2)}")
             return False
     
     async def extract_text(self, image_path: str, language: str = "en") -> str:
         """
-        Extrait le texte d'une image avec PaddleOCR
+        Extrait le texte d'une image avec PaddleOCR (GPU optimisé)
         
         Args:
             image_path: Chemin vers le fichier image
@@ -53,14 +90,19 @@ class PaddleOCRProcessor:
         if not self.available:
             raise Exception("PaddleOCR non disponible")
         
+        start_time = time.time()
+        
         try:
-            logger.info(f"Extraction PaddleOCR démarrée: {image_path}")
+            device_info = "GPU" if self.use_gpu else "CPU"
+            logger.info(f"Extraction PaddleOCR démarrée ({device_info}): {image_path}")
             
             # Préprocesser l'image si nécessaire
             processed_image_path = await self._preprocess_image(image_path)
             
-            # Exécuter PaddleOCR
+            # Exécuter PaddleOCR avec mesure de performance
+            ocr_start = time.time()
             results = self.ocr_engine.ocr(processed_image_path, cls=True)
+            ocr_time = time.time() - ocr_start
             
             # Extraire le texte des résultats
             extracted_text = self._extract_text_from_results(results)
@@ -69,7 +111,11 @@ class PaddleOCRProcessor:
             if processed_image_path != image_path and os.path.exists(processed_image_path):
                 os.unlink(processed_image_path)
             
-            logger.info(f"✅ PaddleOCR: {len(extracted_text)} caractères extraits")
+            # Mettre à jour les statistiques de performance
+            total_time = time.time() - start_time
+            self._update_performance_stats(total_time)
+            
+            logger.info(f"✅ PaddleOCR ({device_info}): {len(extracted_text)} caractères extraits en {ocr_time:.2f}s")
             return extracted_text
             
         except Exception as e:
@@ -288,3 +334,66 @@ class PaddleOCRProcessor:
             results["tesseract"]["error"] = str(e)
         
         return results
+    
+    def _update_performance_stats(self, extraction_time: float):
+        """Met à jour les statistiques de performance"""
+        self.performance_stats["total_extractions"] += 1
+        self.performance_stats["total_time"] += extraction_time
+        self.performance_stats["avg_time"] = (
+            self.performance_stats["total_time"] / self.performance_stats["total_extractions"]
+        )
+    
+    def get_gpu_info(self) -> Dict[str, Any]:
+        """Retourne les informations GPU détaillées"""
+        return {
+            "gpu_detector": self.gpu_detector.get_gpu_info(),
+            "performance_estimate": self.gpu_detector.get_performance_estimate(),
+            "current_device": "GPU" if self.use_gpu else "CPU",
+            "performance_stats": self.performance_stats.copy()
+        }
+    
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """Retourne un résumé des performances"""
+        stats = self.performance_stats.copy()
+        gpu_info = self.gpu_detector.get_gpu_info()
+        
+        return {
+            "device": "GPU" if self.use_gpu else "CPU",
+            "gpu_available": gpu_info.get("nvidia_gpu", False),
+            "gpu_memory_mb": gpu_info.get("gpu_memory", 0),
+            "total_extractions": stats["total_extractions"],
+            "avg_extraction_time": round(stats["avg_time"], 3),
+            "total_processing_time": round(stats["total_time"], 2),
+            "estimated_speedup": self.gpu_detector.get_performance_estimate().get("expected_speedup", 1.0)
+        }
+    
+    async def warmup_gpu(self):
+        """Réchauffe le GPU pour des performances optimales"""
+        if not self.use_gpu or not self.available:
+            return
+        
+        try:
+            logger.info("🔥 Réchauffage GPU en cours...")
+            
+            # Créer une image de test minimale
+            test_image = np.ones((100, 100, 3), dtype=np.uint8) * 255
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+                cv2.imwrite(tmp_file.name, test_image)
+                
+                # Exécuter une extraction de test
+                start_time = time.time()
+                _ = self.ocr_engine.ocr(tmp_file.name, cls=False)
+                warmup_time = time.time() - start_time
+                
+                # Nettoyer
+                os.unlink(tmp_file.name)
+                
+                logger.info(f"✅ GPU réchauffé en {warmup_time:.2f}s")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Échec réchauffage GPU: {str(e)}")
+    
+    def reset_performance_stats(self):
+        """Remet à zéro les statistiques de performance"""
+        self.performance_stats = {"total_extractions": 0, "total_time": 0.0, "avg_time": 0.0}
+        logger.info("📊 Statistiques de performance réinitialisées")

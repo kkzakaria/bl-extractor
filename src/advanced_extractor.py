@@ -128,9 +128,16 @@ class AdvancedBLExtractor:
         
         return found_sections >= 2  # Au moins 2 sections sur 3
     
-    def get_capabilities(self) -> Dict[str, bool]:
-        """Retourne les capacités disponibles"""
-        return {
+    def get_capabilities(self) -> Dict[str, Any]:
+        """Retourne les capacités disponibles avec informations GPU"""
+        # Récupérer les informations GPU depuis PaddleOCR
+        paddleocr_gpu_info = {}
+        if hasattr(self.pdf_processor, 'paddleocr_processor') and self.pdf_processor.paddleocr_processor:
+            paddleocr_gpu_info = self.pdf_processor.paddleocr_processor.get_gpu_info()
+        elif hasattr(self.image_processor, 'paddleocr_processor') and self.image_processor.paddleocr_processor:
+            paddleocr_gpu_info = self.image_processor.paddleocr_processor.get_gpu_info()
+        
+        base_capabilities = {
             "docling_available": self.docling_processor.is_available(),
             "llm_available": self.llm_enhancer.is_available(),
             "pdf_support": True,
@@ -138,6 +145,33 @@ class AdvancedBLExtractor:
             "structured_extraction": self.docling_processor.is_available(),
             "intelligent_parsing": self.llm_enhancer.is_available()
         }
+        
+        # Ajouter les informations GPU si disponibles
+        if paddleocr_gpu_info:
+            gpu_detector = paddleocr_gpu_info.get("gpu_detector", {})
+            performance_estimate = paddleocr_gpu_info.get("performance_estimate", {})
+            
+            base_capabilities.update({
+                "gpu_acceleration": gpu_detector.get("recommended_use_gpu", False),
+                "nvidia_gpu": gpu_detector.get("nvidia_gpu", False),
+                "cuda_available": gpu_detector.get("cuda_available", False),
+                "gpu_memory_mb": gpu_detector.get("gpu_memory", 0),
+                "gpu_count": gpu_detector.get("gpu_count", 0),
+                "expected_speedup": performance_estimate.get("expected_speedup", 1.0),
+                "current_ocr_device": paddleocr_gpu_info.get("current_device", "CPU")
+            })
+        else:
+            base_capabilities.update({
+                "gpu_acceleration": False,
+                "nvidia_gpu": False,
+                "cuda_available": False,
+                "gpu_memory_mb": 0,
+                "gpu_count": 0,
+                "expected_speedup": 1.0,
+                "current_ocr_device": "CPU"
+            })
+        
+        return base_capabilities
     
     def get_recommended_strategy(self, file_extension: str) -> str:
         """Retourne la stratégie recommandée selon le type de fichier"""
@@ -155,3 +189,32 @@ class AdvancedBLExtractor:
                 return "ocr_llm_standard"
             else:
                 return "ocr_regex_basic"
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Retourne les statistiques de performance détaillées"""
+        stats = {}
+        
+        # Statistiques PaddleOCR
+        if hasattr(self.pdf_processor, 'paddleocr_processor') and self.pdf_processor.paddleocr_processor:
+            stats["paddleocr_pdf"] = self.pdf_processor.paddleocr_processor.get_performance_summary()
+        
+        if hasattr(self.image_processor, 'paddleocr_processor') and self.image_processor.paddleocr_processor:
+            stats["paddleocr_image"] = self.image_processor.paddleocr_processor.get_performance_summary()
+        
+        # Capacités globales
+        stats["capabilities"] = self.get_capabilities()
+        
+        return stats
+    
+    async def warmup_system(self):
+        """Réchauffe tous les composants pour des performances optimales"""
+        logger.info("🔥 Réchauffage du système en cours...")
+        
+        # Réchauffer PaddleOCR GPU si disponible
+        if hasattr(self.pdf_processor, 'paddleocr_processor') and self.pdf_processor.paddleocr_processor:
+            await self.pdf_processor.paddleocr_processor.warmup_gpu()
+        
+        if hasattr(self.image_processor, 'paddleocr_processor') and self.image_processor.paddleocr_processor:
+            await self.image_processor.paddleocr_processor.warmup_gpu()
+        
+        logger.info("✅ Système réchauffé et prêt")

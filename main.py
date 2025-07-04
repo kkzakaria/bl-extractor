@@ -76,7 +76,7 @@ async def health_check():
 
 @app.get("/capabilities")
 async def get_capabilities():
-    """Retourne les capacités du service"""
+    """Retourne les capacités du service avec informations GPU"""
     capabilities = extractor.get_capabilities()
     
     recommendations = {
@@ -96,6 +96,17 @@ async def get_capabilities():
             "docling_paddleocr_regex"    # Fallback avec structure
         ]
     }
+
+@app.get("/performance")
+async def get_performance_stats():
+    """Retourne les statistiques de performance détaillées"""
+    return extractor.get_performance_stats()
+
+@app.post("/warmup")
+async def warmup_system():
+    """Réchauffe le système pour des performances optimales"""
+    await extractor.warmup_system()
+    return {"status": "success", "message": "Système réchauffé"}
 
 if __name__ == "__main__":
     import uvicorn

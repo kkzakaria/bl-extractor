@@ -25,8 +25,11 @@ python test_simple_llm.py
 
 ### Installation
 ```bash
-# Install Python dependencies
+# Install Python dependencies (CPU version)
 pip install -r requirements.txt
+
+# For GPU acceleration (NVIDIA GPU with CUDA)
+pip install -r requirements-gpu.txt
 
 # Install system dependencies for PaddleOCR
 pip install paddlepaddle paddleocr
@@ -40,13 +43,23 @@ ollama pull gemma3:12b
 
 # Install Docling for structured extraction
 pip install docling
+
+# Verify GPU setup (optional)
+nvidia-smi  # Check GPU status
+python -c "import paddle; print(f'GPU count: {paddle.device.cuda.device_count()}')"
 ```
 
 ### API Usage
 ```bash
-# Health check and capabilities
+# Health check and capabilities (includes GPU info)
 curl http://localhost:8000/health
 curl http://localhost:8000/capabilities
+
+# Performance statistics and GPU status
+curl http://localhost:8000/performance
+
+# Warm up system for optimal performance (especially GPU)
+curl -X POST http://localhost:8000/warmup
 
 # Extract with optimal strategy (Docling + PaddleOCR + LLM)
 curl -X POST "http://localhost:8000/extract" \
@@ -74,7 +87,8 @@ The extraction system uses a cascading fallback strategy:
 - **`src/pdf_processor.py`**: PDF text extraction with OCR fallback
 - **`src/image_processor.py`**: Image preprocessing and OCR
 - **`src/text_parser.py`**: Regex-based fallback parsing
-- **`src/paddleocr_processor.py`**: Modern OCR implementation
+- **`src/paddleocr_processor.py`**: Modern OCR implementation with GPU acceleration
+- **`src/gpu_detector.py`**: Automatic GPU detection and optimization
 
 ### Extraction Methods
 
@@ -100,11 +114,13 @@ The system automatically selects the best available method:
 
 - **FastAPI**: Web framework and API
 - **Docling**: PDF layout analysis and structured extraction
-- **PaddleOCR**: Modern OCR engine (primary)
+- **PaddleOCR**: Modern OCR engine with GPU acceleration (primary)
+- **PaddlePaddle-GPU**: GPU version for NVIDIA CUDA acceleration (optional)
 - **Tesseract**: OCR fallback
 - **Ollama**: LLM inference server
 - **Pydantic**: Data validation and serialization
 - **OpenCV/Pillow**: Image processing
+- **CUDA**: NVIDIA GPU computing platform (optional)
 
 ## Testing Strategy
 
@@ -116,7 +132,21 @@ The project includes integration tests for each major component:
 
 ## Configuration
 
-The system automatically detects available capabilities and adjusts extraction strategy accordingly. No manual configuration required - the service gracefully degrades if optional dependencies (Docling, Ollama) are unavailable.
+The system automatically detects available capabilities and adjusts extraction strategy accordingly:
+
+### GPU Detection
+- Automatic detection of NVIDIA GPUs and CUDA availability
+- Performance estimation based on GPU memory and capabilities
+- Graceful fallback to CPU if GPU is unavailable or not recommended
+- Real-time performance monitoring and statistics
+
+### Capabilities
+- GPU acceleration status
+- Available VRAM and GPU count
+- Expected performance improvements (typically 2-5x speedup)
+- Current device utilization (CPU/GPU)
+
+No manual configuration required - the service gracefully degrades if optional dependencies (Docling, Ollama, GPU) are unavailable.
 
 ## Output Schema
 
