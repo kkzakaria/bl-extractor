@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import logging
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,15 @@ app = FastAPI(
     title="Bill of Lading Extractor",
     description="Service d'extraction de données de connaissements (PDF/Images) vers JSON",
     version="1.0.0"
+)
+
+# Configurer CORS pour permettre les requêtes depuis l'interface web
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # En production, spécifier les domaines autorisés
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Servir les fichiers statiques pour l'interface web
